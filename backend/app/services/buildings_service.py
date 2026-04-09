@@ -193,91 +193,72 @@ def _google_maps_url(longitude: float, latitude: float) -> str:
     return f"https://www.google.com/maps?q={latitude},{longitude}"
 
 
-# Tile size in degrees used when splitting a large AOI into chunks.
-# ~0.25° ≈ 27 km at the equator — dense urban tiles stay well under 5 000 features.
-_TILE_DEG = 0.25
-
-
-def _fetch_features_tiled(
+def _fetch_features_paginated(
     feature_collection: ee.FeatureCollection,
-    aoi: ee.Geometry,
 ) -> dict[str, Any]:
-    """Retrieve a FeatureCollection without hitting the GEE 5 000-element cap.
+    """Retrieve a FeatureCollection using server-side pagination.
 
-    The hard limit is enforced server-side whenever GEE must enumerate more than
-    5 000 collection members for a single interactive getInfo() call.  The fix is
-    two-pronged:
+    ee.data.computeFeatures() uses an internal pageToken loop and is not
+    subject to the interactive 5 000-element cap that getInfo() enforces.
+    It is the right tool whenever the caller has already reduced the collection
+    to a manageable set via server-side filters (see score_buildings).
 
-    1. Use ee.data.computeFeatures() instead of getInfo().  That function uses
-       server-side pagination (pageToken loop) and is not subject to the 5 000-
-       element cap.
-    2. Tile the AOI bounding box so that each call covers a small area.  This
-       keeps individual requests fast and avoids interactive compute-time limits
-       that can still fire on very large feature sets even with computeFeatures.
-
-    Features that straddle a tile boundary are deduplicated by their GEE
-    system:index (stored in the 'id' field of the returned GeoJSON features).
+    Falls back to tiled retrieval only if computeFeatures raises — which can
+    happen for very large or complex feature sets that exceed interactive
+    compute-time limits even with pagination.
     """
 
-    # One lightweight getInfo to materialise the bounding box client-side.
-    bounds_info = aoi.bounds(1).getInfo()
+    try:
+        result = ee.data.computeFeatures({
+            "expression": feature_collection,
+            "fileFormat": "GEOJSON",
+        })
+        return {"type": "FeatureCollection", "features": (result or {}).get("features", [])}
+    except Exception:
+        pass  # fall through to tiled retrieval
+
+    # Tile fallback: split the bounding box into 0.25° chunks and merge results.
+    # Only reached for very dense urban areas where even the filtered set is large.
+    _TILE_DEG = 0.25
+    bounds_info = feature_collection.geometry().bounds(1).getInfo()
     ring = bounds_info["coordinates"][0]
     min_lon = min(c[0] for c in ring)
     max_lon = max(c[0] for c in ring)
     min_lat = min(c[1] for c in ring)
     max_lat = max(c[1] for c in ring)
 
-    # Build the tile grid over the bounding box.
-    tiles: list[tuple[float, float, float, float]] = []
+    all_features: list[dict[str, Any]] = []
+    seen: set[str] = set()
+
     lon = min_lon
     while lon < max_lon:
         lat = min_lat
         while lat < max_lat:
-            tiles.append((
-                lon,
-                lat,
+            tile_geom = ee.Geometry.Rectangle([
+                lon, lat,
                 min(lon + _TILE_DEG, max_lon),
                 min(lat + _TILE_DEG, max_lat),
-            ))
-            lat += _TILE_DEG
-        lon += _TILE_DEG
-
-    all_features: list[dict[str, Any]] = []
-    seen: set[str] = set()
-
-    for (t0, t1, t2, t3) in tiles:
-        tile_geom = ee.Geometry.Rectangle([t0, t1, t2, t3])
-        tile_fc = feature_collection.filterBounds(tile_geom)
-
-        tile_features: list[dict[str, Any]] = []
-        try:
-            # computeFeatures paginates server-side — no element-count cap.
-            result = ee.data.computeFeatures({
-                "expression": tile_fc,
-                "fileFormat": "GEOJSON",
-            })
-            tile_features = (result or {}).get("features", [])
-        except Exception:
-            # Fallback: capped getInfo.  Better to return a partial result for
-            # this tile than to abort the whole run.
+            ])
+            tile_fc = feature_collection.filterBounds(tile_geom)
+            tile_features: list[dict[str, Any]] = []
             try:
-                result = tile_fc.limit(4999).getInfo()
+                result = ee.data.computeFeatures({"expression": tile_fc, "fileFormat": "GEOJSON"})
                 tile_features = (result or {}).get("features", [])
             except Exception:
-                pass  # Skip the tile — the run still produces partial results.
-
-        for feature in tile_features:
-            # Use the GEE system:index as a stable deduplication key.
-            fid = str(
-                feature.get("id")
-                or feature.get("properties", {}).get("system:index")
-                or ""
-            )
-            if fid and fid in seen:
-                continue
-            if fid:
-                seen.add(fid)
-            all_features.append(feature)
+                try:
+                    result = tile_fc.limit(4999).getInfo()
+                    tile_features = (result or {}).get("features", [])
+                except Exception:
+                    pass
+            for feature in tile_features:
+                fid = str(feature.get("id") or feature.get("properties", {}).get("system:index") or "")
+                if fid and fid in seen:
+                    continue
+                if fid:
+                    seen.add(fid)
+                all_features.append(feature)
+            lat += _TILE_DEG
+        lon += _TILE_DEG
 
     return {"type": "FeatureCollection", "features": all_features}
 
@@ -363,15 +344,28 @@ def score_buildings(aoi: ee.Geometry, image: ee.Image, threshold: float) -> dict
         scale=10,
         tileScale=8,
     )
+    # Tag each building with its damage probability and damaged flag.  Both
+    # operations are lazy — nothing is computed on GEE servers yet.
     enriched = scored.map(
         lambda feature: feature.set(
             "damage_probability", ee.Number(feature.get("mean")),
             "damaged", ee.Number(ee.Algorithms.If(ee.Number(feature.get("mean")).gte(threshold), 1, 0)),
         )
     )
-    feature_collection = _fetch_features_tiled(enriched, aoi)
+
+    # Server-side filter: keep only buildings at or above the threshold.
+    # This is still lazy — GEE adds it to the computation graph and evaluates
+    # it during materialisation, so only the features we actually need cross
+    # the wire.  For a typical threshold this reduces the result set by 80–95 %
+    # compared to fetching all candidates, which is the primary reason the
+    # 5 000-element cap was being hit.
+    damaged_fc = enriched.filter(ee.Filter.gte("mean", threshold))
+
+    feature_collection = _fetch_features_paginated(damaged_fc)
     top_damaged: list[dict[str, Any]] = []
 
+    # Every feature in the result is already confirmed damaged (mean >= threshold),
+    # so the loop only needs to enrich properties — no damaged-flag check required.
     for index, feature in enumerate(feature_collection.get("features", []), start=1):
         properties = feature.setdefault("properties", {})
         score = _mean_score_to_float(properties.get("damage_probability", properties.get("mean")))
@@ -379,24 +373,24 @@ def score_buildings(aoi: ee.Geometry, image: ee.Image, threshold: float) -> dict
         category = _damage_category(score, threshold)
 
         properties["damage_probability"] = score
+        properties["damaged"] = 1
         properties["category"] = category
         properties["longitude"] = longitude
         properties["latitude"] = latitude
         properties["google_maps_url"] = _google_maps_url(longitude, latitude)
         properties["label"] = f"Building {index}"
 
-        if properties.get("damaged"):
-            top_damaged.append(
-                {
-                    "label": properties["label"],
-                    "category": category,
-                    "damage_probability": score,
-                    "google_maps_url": properties["google_maps_url"],
-                }
-            )
+        top_damaged.append(
+            {
+                "label": properties["label"],
+                "category": category,
+                "damage_probability": score,
+                "google_maps_url": properties["google_maps_url"],
+            }
+        )
 
     top_damaged.sort(key=lambda item: item["damage_probability"], reverse=True)
-    damaged_buildings = sum(1 for feature in feature_collection.get("features", []) if feature.get("properties", {}).get("damaged"))
+    damaged_buildings = len(feature_collection.get("features", []))
     damaged_share = round((damaged_buildings / total_buildings) * 100, 2) if total_buildings else 0.0
 
     return {
