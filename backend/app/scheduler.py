@@ -27,7 +27,9 @@ _active_lock = threading.Lock()
 
 # A run that produces no heartbeat for this long is assumed to be stuck on a
 # blocking GEE call and will be marked as failed so the UI reflects reality.
-_STALL_TIMEOUT_SECONDS = 45 * 60  # 45 minutes
+# Raised to 90 minutes because tiled building retrieval on large AOIs can
+# legitimately take 60+ minutes across many sequential tile round-trips.
+_STALL_TIMEOUT_SECONDS = 90 * 60  # 90 minutes
 
 
 def _worker(run_id: int, parameters: dict) -> None:
@@ -79,9 +81,10 @@ def reap_stalled_runs() -> None:
         mark_run_failed(
             run_id,
             f"Run stopped making progress and was cancelled after "
-            f"{_STALL_TIMEOUT_SECONDS // 60} minutes. Earth Engine likely ran out of "
-            "compute budget for this AOI size. Try a smaller area, a shorter date "
-            "range, or a higher threshold to reduce the analysis footprint.",
+            f"{_STALL_TIMEOUT_SECONDS // 60} minutes. A GEE request is likely "
+            "hanging — this can happen with very large or densely-built AOIs. "
+            "Try a smaller area, a shorter date range, or raise the threshold "
+            "to reduce the number of candidate buildings.",
         )
         with _active_lock:
             _active_run_ids.discard(run_id)

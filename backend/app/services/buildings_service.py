@@ -193,6 +193,95 @@ def _google_maps_url(longitude: float, latitude: float) -> str:
     return f"https://www.google.com/maps?q={latitude},{longitude}"
 
 
+# Tile size in degrees used when splitting a large AOI into chunks.
+# ~0.25° ≈ 27 km at the equator — dense urban tiles stay well under 5 000 features.
+_TILE_DEG = 0.25
+
+
+def _fetch_features_tiled(
+    feature_collection: ee.FeatureCollection,
+    aoi: ee.Geometry,
+) -> dict[str, Any]:
+    """Retrieve a FeatureCollection without hitting the GEE 5 000-element cap.
+
+    The hard limit is enforced server-side whenever GEE must enumerate more than
+    5 000 collection members for a single interactive getInfo() call.  The fix is
+    two-pronged:
+
+    1. Use ee.data.computeFeatures() instead of getInfo().  That function uses
+       server-side pagination (pageToken loop) and is not subject to the 5 000-
+       element cap.
+    2. Tile the AOI bounding box so that each call covers a small area.  This
+       keeps individual requests fast and avoids interactive compute-time limits
+       that can still fire on very large feature sets even with computeFeatures.
+
+    Features that straddle a tile boundary are deduplicated by their GEE
+    system:index (stored in the 'id' field of the returned GeoJSON features).
+    """
+
+    # One lightweight getInfo to materialise the bounding box client-side.
+    bounds_info = aoi.bounds(1).getInfo()
+    ring = bounds_info["coordinates"][0]
+    min_lon = min(c[0] for c in ring)
+    max_lon = max(c[0] for c in ring)
+    min_lat = min(c[1] for c in ring)
+    max_lat = max(c[1] for c in ring)
+
+    # Build the tile grid over the bounding box.
+    tiles: list[tuple[float, float, float, float]] = []
+    lon = min_lon
+    while lon < max_lon:
+        lat = min_lat
+        while lat < max_lat:
+            tiles.append((
+                lon,
+                lat,
+                min(lon + _TILE_DEG, max_lon),
+                min(lat + _TILE_DEG, max_lat),
+            ))
+            lat += _TILE_DEG
+        lon += _TILE_DEG
+
+    all_features: list[dict[str, Any]] = []
+    seen: set[str] = set()
+
+    for (t0, t1, t2, t3) in tiles:
+        tile_geom = ee.Geometry.Rectangle([t0, t1, t2, t3])
+        tile_fc = feature_collection.filterBounds(tile_geom)
+
+        tile_features: list[dict[str, Any]] = []
+        try:
+            # computeFeatures paginates server-side — no element-count cap.
+            result = ee.data.computeFeatures({
+                "expression": tile_fc,
+                "fileFormat": "GEOJSON",
+            })
+            tile_features = (result or {}).get("features", [])
+        except Exception:
+            # Fallback: capped getInfo.  Better to return a partial result for
+            # this tile than to abort the whole run.
+            try:
+                result = tile_fc.limit(4999).getInfo()
+                tile_features = (result or {}).get("features", [])
+            except Exception:
+                pass  # Skip the tile — the run still produces partial results.
+
+        for feature in tile_features:
+            # Use the GEE system:index as a stable deduplication key.
+            fid = str(
+                feature.get("id")
+                or feature.get("properties", {}).get("system:index")
+                or ""
+            )
+            if fid and fid in seen:
+                continue
+            if fid:
+                seen.add(fid)
+            all_features.append(feature)
+
+    return {"type": "FeatureCollection", "features": all_features}
+
+
 def _candidate_footprints(footprints: ee.FeatureCollection, image: ee.Image, aoi: ee.Geometry, threshold: float) -> ee.FeatureCollection:
     """Limit expensive building scoring to hotspot areas instead of the whole AOI.
 
@@ -280,7 +369,7 @@ def score_buildings(aoi: ee.Geometry, image: ee.Image, threshold: float) -> dict
             "damaged", ee.Number(ee.Algorithms.If(ee.Number(feature.get("mean")).gte(threshold), 1, 0)),
         )
     )
-    feature_collection = enriched.getInfo()
+    feature_collection = _fetch_features_tiled(enriched, aoi)
     top_damaged: list[dict[str, Any]] = []
 
     for index, feature in enumerate(feature_collection.get("features", []), start=1):

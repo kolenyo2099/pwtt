@@ -47,8 +47,8 @@
 	let aoiMessage = '';
 
 	// Bounding-box area thresholds (km²) — kept in sync with backend schemas.py.
-	const AOI_WARN_KM2 = 10_000;
-	const AOI_MAX_KM2 = 100_000;
+	const AOI_WARN_KM2 = 25_000;
+	const AOI_MAX_KM2 = 250_000;
 
 	function computeBboxAreaKm2(geometry: GeoJSON.Geometry | null): number {
 		if (!geometry) return 0;
@@ -256,7 +256,7 @@
 
 		if (savedAoiGeometry && savedAoiAreaKm2 > AOI_MAX_KM2) {
 			blockers.push(
-				`AOI is too large (~${savedAoiAreaKm2.toLocaleString()} km²). Keep it under ${AOI_MAX_KM2.toLocaleString()} km² to stay within Earth Engine compute limits.`
+				`AOI bounding box is ~${savedAoiAreaKm2.toLocaleString()} km² — above the ${AOI_MAX_KM2.toLocaleString()} km² limit. Even with tiled retrieval this would take many hours. Draw a smaller area.`
 			);
 		}
 
@@ -529,9 +529,9 @@
 						class:aoi-size-block={aoiAreaKm2 > AOI_MAX_KM2}
 					>
 						{#if aoiAreaKm2 > AOI_MAX_KM2}
-							⛔ ~{aoiAreaKm2.toLocaleString()} km² — too large. Earth Engine will not finish. Draw a smaller area.
+							⛔ ~{aoiAreaKm2.toLocaleString()} km² — too large even with tiled retrieval. Draw a smaller area.
 						{:else if aoiAreaKm2 > AOI_WARN_KM2}
-							⚠ ~{aoiAreaKm2.toLocaleString()} km² — large AOI. Expect 20–40 min processing time; a smaller area is faster.
+							⚠ ~{aoiAreaKm2.toLocaleString()} km² — large AOI. Tiled retrieval will run but expect 30–90 min processing.
 						{:else}
 							~{aoiAreaKm2.toLocaleString()} km²
 						{/if}

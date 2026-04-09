@@ -13,10 +13,11 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field, field_validator
 
-# ~160 km × 160 km bounding box. Larger areas routinely exceed Earth Engine
-# compute budgets or hang for tens of minutes without returning.
-AOI_WARN_KM2 = 10_000
-AOI_MAX_KM2 = 100_000
+# Building retrieval now uses tiled ee.data.computeFeatures() which bypasses
+# the 5 000-element GEE cap, so much larger areas are feasible.
+# Warn at ~160 km × 160 km; hard-block at ~500 km × 500 km.
+AOI_WARN_KM2 = 25_000
+AOI_MAX_KM2 = 250_000
 
 
 def _collect_coords(obj: Any, out: list[list[float]]) -> None:
