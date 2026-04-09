@@ -1,0 +1,57 @@
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@500;700&display=swap');
+@import 'leaflet/dist/leaflet.css';
+@import 'leaflet-draw/dist/leaflet.draw.css';
+
+:root {
+	--bg: #f2efe8;
+	--panel: rgba(255, 255, 255, 0.84);
+	--panel-strong: #fffdf8;
+	--ink: #1d2935;
+	--muted: #5c6773;
+	--line: rgba(29, 41, 53, 0.12);
+	--accent: #c44f1d;
+	--accent-soft: #f4c999;
+	--olive: #53624f;
+	--teal: #2d7f7b;
+	--shadow: 0 24px 60px rgba(29, 41, 53, 0.12);
+}
+
+html,
+body {
+	margin: 0;
+	min-height: 100%;
+	background:
+		radial-gradient(circle at 20% 20%, rgba(196, 79, 29, 0.2), transparent 28%),
+		radial-gradient(circle at 80% 0%, rgba(45, 127, 123, 0.18), transparent 24%),
+		linear-gradient(180deg, #e9e2d4 0%, var(--bg) 45%, #ebe7de 100%);
+	color: var(--ink);
+	font-family: 'IBM Plex Sans', sans-serif;
+}
+
+body {
+	min-width: 320px;
+}
+
+h1,
+h2,
+h3,
+h4 {
+	font-family: 'Space Grotesk', sans-serif;
+	margin: 0;
+}
+
+button,
+input,
+textarea,
+select {
+	font: inherit;
+}
+
+button {
+	cursor: pointer;
+}
+
+.leaflet-container {
+	font-family: 'IBM Plex Sans', sans-serif;
+}
+
