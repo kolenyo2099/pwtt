@@ -5,11 +5,17 @@ from __future__ import annotations
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import Response
 
-from ..repositories.runs_repository import create_run, delete_run, get_run, list_runs
-from ..schemas import RunCreateInput
+from ..repositories.runs_repository import create_run, delete_run, get_run, list_runs, requeue_run
+from ..schemas import PreflightOutput, RunCreateInput
 from ..services.cache_service import delete_run_cache, get_run_cache_file
+from ..services.earth_engine_service import ensure_earth_engine, geometry_from_geojson
 from ..services.kml_service import feature_collection_to_kml
-from ..services.pipeline_service import build_run_detail, export_damage_kml, export_triptych_png
+from ..services.pipeline_service import (
+    build_run_detail,
+    check_sentinel1_coverage,
+    export_damage_kml,
+    export_triptych_png,
+)
 
 
 router = APIRouter(prefix="/runs", tags=["runs"])
@@ -28,6 +34,26 @@ def enqueue_run(payload: RunCreateInput) -> dict[str, int | str]:
 
     run_id = create_run(payload.model_dump())
     return {"id": run_id, "status": "queued"}
+
+
+@router.post("/preflight")
+def preflight_run(payload: RunCreateInput) -> PreflightOutput:
+    """Check Sentinel-1 coverage for the chosen AOI and dates before queueing.
+
+    This runs the same coverage validation the pipeline performs, but at
+    submit time — so a bad date combination fails in seconds with a clear
+    message instead of after minutes in the queue. It also reports scene
+    counts so the user can judge the statistical power of their windows.
+    """
+
+    try:
+        ensure_earth_engine()
+        aoi = geometry_from_geojson(payload.aoi_geojson)
+        coverage = check_sentinel1_coverage(aoi, payload.model_dump())
+    except ValueError as exc:
+        return PreflightOutput(ok=False, message=str(exc), coverage=None)
+
+    return PreflightOutput(ok=True, message=None, coverage=coverage)
 
 
 @router.get("/{run_id}")
@@ -90,6 +116,20 @@ def export_run_png(run_id: int) -> Response:
     png_bytes = export_triptych_png(run)
     headers = {"Content-Disposition": f'attachment; filename="pwtt-run-{run_id}.png"'}
     return Response(content=png_bytes, media_type="image/png", headers=headers)
+
+
+@router.post("/{run_id}/retry")
+def retry_run(run_id: int) -> dict[str, int | str]:
+    """Re-queue a failed run so the scheduler will attempt it again."""
+
+    run = get_run(run_id)
+    if not run:
+        raise HTTPException(status_code=404, detail="Run not found.")
+    if run["status"] != "failed":
+        raise HTTPException(status_code=409, detail="Only failed runs can be retried.")
+
+    requeue_run(run_id)
+    return {"id": run_id, "status": "queued"}
 
 
 @router.delete("/{run_id}", status_code=204)

@@ -5,6 +5,7 @@
 	export let imageUrl = '';
 	export let expanded = false;
 	export let showLegend = false;
+	export let legendTitle = 'Legend';
 	export let legendItems: Array<{ color: string; label: string }> = [];
 
 	const dispatch = createEventDispatcher<{ open: void }>();
@@ -48,7 +49,7 @@
 
 		{#if showLegend}
 			<div class="legend">
-				<strong>Legend</strong>
+				<strong>{legendTitle}</strong>
 				<div class="legend-row">
 					{#each legendItems as item}
 						<div class="legend-item">

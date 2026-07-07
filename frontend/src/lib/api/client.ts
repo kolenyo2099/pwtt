@@ -1,6 +1,7 @@
 import type {
 	AuthSettings,
 	BrowserAuthStatus,
+	PreflightResult,
 	RunDetail,
 	RunInput,
 	RunSummary
@@ -66,10 +67,19 @@ export const api = {
 			method: 'POST',
 			body: JSON.stringify(payload)
 		}),
+	preflightRun: (payload: RunInput) =>
+		request<PreflightResult>('/api/runs/preflight', {
+			method: 'POST',
+			body: JSON.stringify(payload)
+		}),
 	getRun: (runId: number) => request<RunDetail>(`/api/runs/${runId}`),
 	deleteRun: (runId: number) =>
 		request<void>(`/api/runs/${runId}`, {
 			method: 'DELETE'
+		}),
+	retryRun: (runId: number) =>
+		request<{ id: number; status: string }>(`/api/runs/${runId}/retry`, {
+			method: 'POST'
 		}),
 	kmlUrl: (runId: number) => `${API_BASE}/api/runs/${runId}/export.kml`,
 	pngUrl: (runId: number) => `${API_BASE}/api/runs/${runId}/export.png`

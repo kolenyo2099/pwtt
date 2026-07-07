@@ -84,6 +84,7 @@ def ensure_earth_engine(project_id: str | None = None) -> dict[str, str | bool |
     with _init_lock:
         if fingerprint != _initialized_fingerprint:
             ee.Initialize(project=project)
+            ee.data.setDeadline(600_000)  # milliseconds → 10 minutes
             # This small server-side request confirms the stored login really works.
             ee.Number(1).getInfo()
             _initialized_fingerprint = fingerprint

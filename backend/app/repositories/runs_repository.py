@@ -47,7 +47,7 @@ def list_runs(limit: int = 10) -> list[dict[str, Any]]:
     with get_connection() as connection:
         rows = connection.execute(
             """
-            SELECT id, status, aoi_name, created_at, updated_at, error_message
+            SELECT id, status, aoi_name, created_at, updated_at, error_message, progress_stage
             FROM runs
             ORDER BY id DESC
             LIMIT ?
@@ -98,6 +98,7 @@ def mark_run_running(run_id: int) -> None:
             UPDATE runs
             SET status = 'running',
                 error_message = NULL,
+                progress_stage = 'Starting',
                 updated_at = CURRENT_TIMESTAMP
             WHERE id = ?
             """,
@@ -116,6 +117,7 @@ def mark_run_completed(run_id: int, summary: dict[str, Any]) -> None:
             SET status = 'completed',
                 summary_json = ?,
                 error_message = NULL,
+                progress_stage = NULL,
                 updated_at = CURRENT_TIMESTAMP
             WHERE id = ?
             """,
@@ -149,6 +151,7 @@ def mark_run_failed(run_id: int, error_message: str) -> None:
             UPDATE runs
             SET status = 'failed',
                 error_message = ?,
+                progress_stage = NULL,
                 updated_at = CURRENT_TIMESTAMP
             WHERE id = ?
             """,
@@ -157,14 +160,24 @@ def mark_run_failed(run_id: int, error_message: str) -> None:
         connection.commit()
 
 
-def touch_run_heartbeat(run_id: int) -> None:
-    """Stamp updated_at so the stall detector knows this run is still making progress."""
+def touch_run_heartbeat(run_id: int, stage: str | None = None) -> None:
+    """Stamp updated_at so the stall detector knows this run is still making progress.
+
+    When a stage label is given it is stored too, so the UI can tell the user
+    which pipeline step is currently running instead of a generic spinner.
+    """
 
     with get_connection() as connection:
-        connection.execute(
-            "UPDATE runs SET updated_at = CURRENT_TIMESTAMP WHERE id = ? AND status = 'running'",
-            (run_id,),
-        )
+        if stage is None:
+            connection.execute(
+                "UPDATE runs SET updated_at = CURRENT_TIMESTAMP WHERE id = ? AND status = 'running'",
+                (run_id,),
+            )
+        else:
+            connection.execute(
+                "UPDATE runs SET updated_at = CURRENT_TIMESTAMP, progress_stage = ? WHERE id = ? AND status = 'running'",
+                (stage, run_id),
+            )
         connection.commit()
 
 
@@ -187,6 +200,24 @@ def get_stalled_runs(timeout_seconds: int) -> list[dict[str, Any]]:
             (timeout_seconds,),
         ).fetchall()
     return [{"id": int(row["id"])} for row in rows]
+
+
+def requeue_run(run_id: int) -> None:
+    """Reset a failed run back to queued so the scheduler will retry it."""
+
+    with get_connection() as connection:
+        connection.execute(
+            """
+            UPDATE runs
+            SET status = 'queued',
+                error_message = NULL,
+                progress_stage = NULL,
+                updated_at = CURRENT_TIMESTAMP
+            WHERE id = ? AND status = 'failed'
+            """,
+            (run_id,),
+        )
+        connection.commit()
 
 
 def delete_run(run_id: int) -> None:

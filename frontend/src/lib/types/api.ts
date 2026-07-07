@@ -30,6 +30,23 @@ export type RunSummary = {
 	created_at: string;
 	updated_at: string;
 	error_message?: string | null;
+	progress_stage?: string | null;
+};
+
+export type CoverageSummary = {
+	pre_scenes: number;
+	post_scenes: number;
+	orbit_count: number;
+	min_pre_scenes_per_orbit: number;
+	min_post_scenes_per_orbit: number;
+	pre_window: [string, string];
+	post_window: [string, string];
+};
+
+export type PreflightResult = {
+	ok: boolean;
+	message?: string | null;
+	coverage?: CoverageSummary | null;
 };
 
 export type RunDetail = RunSummary & {
@@ -37,10 +54,13 @@ export type RunDetail = RunSummary & {
 	parameters: RunInput;
 	summary?: {
 		damaged_area_ha: number;
+		built_area_ha?: number | null;
 		damage_share_pct: number;
+		aoi_share_pct?: number | null;
 		mean_t_score: number;
 		max_t_score: number;
 		damaged_pixel_estimate: number;
+		coverage?: CoverageSummary | null;
 		buildings?: {
 			available: boolean;
 			reason?: string | null;
@@ -48,6 +68,7 @@ export type RunDetail = RunSummary & {
 			damaged_buildings: number;
 			damaged_share_pct: number;
 			asset_ids?: string[] | null;
+			min_building_area_m2?: number | null;
 			top_damaged_buildings?: Array<{
 				label: string;
 				category: string;

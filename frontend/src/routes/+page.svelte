@@ -8,7 +8,13 @@
 	import ImageModal from '$lib/components/ImageModal.svelte';
 	import StepRail from '$lib/components/StepRail.svelte';
 	import TilePanel from '$lib/components/TilePanel.svelte';
-	import type { AuthSettings, BrowserAuthStatus, RunDetail, RunSummary } from '$lib/types/api';
+	import type {
+		AuthSettings,
+		BrowserAuthStatus,
+		PreflightResult,
+		RunDetail,
+		RunSummary
+	} from '$lib/types/api';
 
 	const steps = [
 		{ id: 'auth', label: 'Authenticate', blurb: 'Save the Earth Engine project and sign in.' },
@@ -76,18 +82,45 @@
 
 	let warStart = '2023-10-10';
 	let inferenceStart = '2024-07-01';
+	// Defaults follow Ballinger (2025): a 1-year baseline and a 2-month post
+	// window. Users can shorten either; the advisories below explain the risk.
 	let preIntervalInput = '12';
-	let postIntervalInput = '1';
+	let postIntervalInput = '2';
 	let thresholdInput = '3.3';
 
 	let runError = '';
 	let runLoading = false;
+	let coverageCheck: PreflightResult | null = null;
+	let coverageChecking = false;
+	let coverageSignature = '';
+	let pollNow = Date.now();
 	let runBlockers: string[] = [];
 	let primaryRunBlocker = '';
 	let hasSavedProject = false;
 	let hasEarthEngineLogin = false;
 	let authReady = false;
 	let pwttLegend: Array<{ color: string; label: string }> = [];
+
+	// SQLite timestamps are UTC but carry no timezone marker; normalize before parsing.
+	function parseUtcDate(value: string): Date {
+		if (/[zZ]|[+-]\d{2}:\d{2}$/.test(value)) {
+			return new Date(value);
+		}
+		return new Date(`${value.replace(' ', 'T')}Z`);
+	}
+
+	function formatRunDate(value: string): string {
+		const parsed = parseUtcDate(value);
+		return Number.isNaN(parsed.getTime())
+			? ''
+			: parsed.toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
+	}
+
+	function elapsedMinutes(value: string, now: number): number {
+		const started = parseUtcDate(value).getTime();
+		if (Number.isNaN(started)) return 0;
+		return Math.max(0, Math.round((now - started) / 60000));
+	}
 
 	// Accept either decimal style so people do not have to adjust to the browser's preferred format.
 	function parseDecimalInput(rawValue: string) {
@@ -164,6 +197,7 @@
 		}
 
 		pollingHandle = setInterval(async () => {
+			pollNow = Date.now();
 			currentRun = await api.getRun(runId);
 			recentRuns = await api.listRuns();
 			if (currentRun.status === 'completed' || currentRun.status === 'failed') {
@@ -174,28 +208,62 @@
 		}, 3000);
 	}
 
+	function buildRunPayload() {
+		return {
+			aoi_name: savedAoiName,
+			aoi_geojson: savedAoiGeometry as GeoJSON.Geometry,
+			war_start: warStart,
+			inference_start: inferenceStart,
+			pre_interval: parseDecimalInput(preIntervalInput),
+			post_interval: parseDecimalInput(postIntervalInput),
+			threshold: parseDecimalInput(thresholdInput)
+		};
+	}
+
+	async function checkCoverage(): Promise<PreflightResult | null> {
+		if (!savedAoiGeometry) {
+			runError = 'Save an AOI before checking imagery coverage.';
+			return null;
+		}
+
+		coverageChecking = true;
+		runError = '';
+		try {
+			coverageCheck = await api.preflightRun(buildRunPayload());
+			coverageSignature = runSignature;
+			return coverageCheck;
+		} catch (error) {
+			runError = error instanceof Error ? error.message : 'Unable to check imagery coverage.';
+			return null;
+		} finally {
+			coverageChecking = false;
+		}
+	}
+
 	async function submitRun() {
 		if (!savedAoiGeometry) {
 			runError = 'Save an AOI before starting the analysis.';
 			return;
 		}
 
-		const preInterval = parseDecimalInput(preIntervalInput);
-		const postInterval = parseDecimalInput(postIntervalInput);
-		const threshold = parseDecimalInput(thresholdInput);
-
 		runLoading = true;
 		runError = '';
 		try {
-			const created = await api.createRun({
-				aoi_name: savedAoiName,
-				aoi_geojson: savedAoiGeometry,
-				war_start: warStart,
-				inference_start: inferenceStart,
-				pre_interval: preInterval,
-				post_interval: postInterval,
-				threshold
-			});
+			// Validate imagery coverage first: a bad date combination should fail
+			// here in seconds, not after minutes in the processing queue.
+			let preflight = coverageSignature === runSignature ? coverageCheck : null;
+			if (!preflight) {
+				preflight = await checkCoverage();
+			}
+			if (!preflight) {
+				return;
+			}
+			if (!preflight.ok) {
+				runError = preflight.message ?? 'No usable radar imagery was found for these dates.';
+				return;
+			}
+
+			const created = await api.createRun(buildRunPayload());
 			currentRun = await api.getRun(created.id);
 			recentRuns = await api.listRuns();
 			currentStep = 3;
@@ -205,6 +273,22 @@
 		} finally {
 			runLoading = false;
 		}
+	}
+
+	function reuseRunSettings(run: RunDetail) {
+		const parameters = run.parameters;
+		warStart = parameters.war_start;
+		inferenceStart = parameters.inference_start;
+		preIntervalInput = String(parameters.pre_interval);
+		postIntervalInput = String(parameters.post_interval);
+		thresholdInput = String(parameters.threshold);
+		savedAoiGeometry = structuredClone(parameters.aoi_geojson);
+		aoiGeometry = structuredClone(parameters.aoi_geojson);
+		savedAoiName = run.aoi_name ?? 'Saved AOI';
+		aoiName = savedAoiName;
+		aoiMessage = 'AOI loaded from the previous run.';
+		runError = '';
+		currentStep = 2;
 	}
 
 	function saveAoi() {
@@ -256,7 +340,7 @@
 
 		if (savedAoiGeometry && savedAoiAreaKm2 > AOI_MAX_KM2) {
 			blockers.push(
-				`AOI bounding box is ~${savedAoiAreaKm2.toLocaleString()} km² — above the ${AOI_MAX_KM2.toLocaleString()} km² limit. Even with tiled retrieval this would take many hours. Draw a smaller area.`
+				`AOI bounding box is ~${savedAoiAreaKm2.toLocaleString()} km² — above the ${AOI_MAX_KM2.toLocaleString()} km² limit. Processing an area this large would take many hours. Draw a smaller area.`
 			);
 		}
 
@@ -383,7 +467,31 @@
 		imageViewer = null;
 	}
 
+	let retryingRunId: number | null = null;
+	let retryError = '';
+
+	async function retryRun(runId: number) {
+		retryingRunId = runId;
+		retryError = '';
+		try {
+			await api.retryRun(runId);
+			currentRun = await api.getRun(runId);
+			recentRuns = await api.listRuns();
+			startPolling(runId);
+		} catch (error) {
+			retryError = error instanceof Error ? error.message : 'Unable to retry the run.';
+		} finally {
+			retryingRunId = null;
+		}
+	}
+
 	async function removeRun(runId: number) {
+		const target = recentRuns.find((run) => run.id === runId);
+		const label = target?.aoi_name || `Run ${runId}`;
+		if (!confirm(`Remove "${label}"? This deletes the run and its cached results permanently.`)) {
+			return;
+		}
+
 		deletingRunId = runId;
 		historyError = '';
 		try {
@@ -422,13 +530,63 @@
 	$: hasSavedProject = Boolean((authState?.project_id ?? projectId).trim());
 	$: hasEarthEngineLogin = Boolean(authState?.credentials_present);
 	$: authReady = hasSavedProject && hasEarthEngineLogin;
+	// A coverage result only applies to the exact AOI + dates it was checked for.
+	$: runSignature = JSON.stringify([
+		savedAoiGeometry,
+		warStart,
+		inferenceStart,
+		preIntervalInput,
+		postIntervalInput
+	]);
+	$: if (coverageCheck && coverageSignature !== runSignature) {
+		coverageCheck = null;
+	}
+	// Soft advisories: unlike runBlockers these never stop the run — they explain
+	// the statistical cost of the chosen windows so short windows stay possible.
+	$: runAdvisories = (() => {
+		const advisories: string[] = [];
+		const preInterval = parseDecimalInput(preIntervalInput);
+		const postInterval = parseDecimalInput(postIntervalInput);
+		if (Number.isFinite(postInterval) && postInterval > 0 && postInterval < 2) {
+			advisories.push(
+				'Post-war window under 2 months: fewer radar images means noisier statistics and more false detections. ' +
+					'The method was validated with 2-month windows — shorter windows are fine for a quick look, but treat the result as indicative.'
+			);
+		}
+		if (Number.isFinite(preInterval) && preInterval > 0 && preInterval < 12) {
+			advisories.push(
+				'Baseline under 12 months: the baseline no longer averages over a full seasonal cycle, so snow, rain, and vegetation changes can be mistaken for damage.'
+			);
+		}
+		return advisories;
+	})();
+	// Sample-size warnings from the coverage check. ~5 scenes per orbit is what
+	// the method's validation used for its 2-month post windows.
+	$: coverageWarnings = (() => {
+		const coverage = coverageCheck?.coverage;
+		if (!coverageCheck?.ok || !coverage) return [] as string[];
+		const warnings: string[] = [];
+		if (coverage.min_post_scenes_per_orbit < 4) {
+			warnings.push(
+				`Only ${coverage.min_post_scenes_per_orbit} post-war image${coverage.min_post_scenes_per_orbit === 1 ? '' : 's'} on the weakest orbit — expect noisy results. Widening the post-war window adds images.`
+			);
+		}
+		if (coverage.min_pre_scenes_per_orbit < 10) {
+			warnings.push(
+				`Only ${coverage.min_pre_scenes_per_orbit} baseline images on the weakest orbit — the pre-war baseline may be unstable. Widening the pre-war window adds images.`
+			);
+		}
+		return warnings;
+	})();
 	$: {
 		const threshold = parseDecimalInput(thresholdInput);
 		const base = Number.isFinite(threshold) ? threshold : 3.3;
+		// The same cutoffs the building categories use (threshold, +0.75, +1.5),
+		// so the map legend and the building chips always agree.
 		pwttLegend = [
-			{ color: '#f6d743', label: `Elevated (${base.toFixed(1)}+)` },
-			{ color: '#e85d04', label: `High (${(base + 0.8).toFixed(1)}+)` },
-			{ color: '#5f0f40', label: `Severe (${(base + 1.6).toFixed(1)}+)` }
+			{ color: '#f6d743', label: `Elevated (T ≥ ${+base.toFixed(2)})` },
+			{ color: '#e85d04', label: `High (T ≥ ${+(base + 0.75).toFixed(2)})` },
+			{ color: '#5f0f40', label: `Severe (T ≥ ${+(base + 1.5).toFixed(2)})` }
 		];
 	}
 	$: if (aoiGeometry) {
@@ -529,11 +687,13 @@
 						class:aoi-size-block={aoiAreaKm2 > AOI_MAX_KM2}
 					>
 						{#if aoiAreaKm2 > AOI_MAX_KM2}
-							⛔ ~{aoiAreaKm2.toLocaleString()} km² — too large even with tiled retrieval. Draw a smaller area.
+							⛔ Bounding box ~{aoiAreaKm2.toLocaleString()} km² — too large to process. Draw a smaller area.
 						{:else if aoiAreaKm2 > AOI_WARN_KM2}
-							⚠ ~{aoiAreaKm2.toLocaleString()} km² — large AOI. Tiled retrieval will run but expect 30–90 min processing.
+							⚠ Bounding box ~{aoiAreaKm2.toLocaleString()} km² — large area. The run will work but expect 30–90 min of
+							processing. Elongated or diagonal shapes measure larger than they look because the size is taken from the
+							surrounding rectangle.
 						{:else}
-							~{aoiAreaKm2.toLocaleString()} km²
+							Bounding box ~{aoiAreaKm2.toLocaleString()} km²
 						{/if}
 					</p>
 				{/if}
@@ -586,19 +746,59 @@
 							<input bind:value={inferenceStart} type="date" />
 						</label>
 						<label>
-							<span>Pre-war months</span>
+							<span class="label-row">
+								Pre-war months
+								<button
+									type="button"
+									class="info-chip"
+									aria-label="How many months before the conflict start form the undamaged baseline. 12 months averages over a full seasonal cycle; shorter baselines can mistake snow or vegetation changes for damage."
+									data-tip="How many months before the conflict start form the undamaged baseline. 12 months averages over a full seasonal cycle; shorter baselines can mistake snow or vegetation changes for damage."
+								>
+									i
+								</button>
+							</span>
 							<input bind:value={preIntervalInput} type="text" inputmode="decimal" placeholder="12" />
 						</label>
 						<label>
-							<span>Post-war months</span>
-							<input bind:value={postIntervalInput} type="text" inputmode="decimal" placeholder="1" />
+							<span class="label-row">
+								Post-war months
+								<button
+									type="button"
+									class="info-chip"
+									aria-label="How many months after the inference start are tested for change. The satellite passes roughly every 12 days, so 2 months gives about 5 images — the sample the method was validated with. Shorter windows work but are noisier."
+									data-tip="How many months after the inference start are tested for change. The satellite passes roughly every 12 days, so 2 months gives about 5 images — the sample the method was validated with. Shorter windows work but are noisier."
+								>
+									i
+								</button>
+							</span>
+							<input bind:value={postIntervalInput} type="text" inputmode="decimal" placeholder="2" />
 						</label>
 					<label>
-						<span>Threshold</span>
+						<span class="label-row">
+							Threshold
+							<button
+								type="button"
+								class="info-chip"
+								aria-label="How strong the radar change must be before a pixel counts as damaged. Higher values mean fewer but more confident detections; lower values find more damage but also more false alarms. The published method uses about 3."
+								data-tip="How strong the radar change must be before a pixel counts as damaged. Higher values mean fewer but more confident detections; lower values find more damage but also more false alarms. The published method uses about 3."
+							>
+								i
+							</button>
+						</span>
 						<input bind:value={thresholdInput} type="text" inputmode="decimal" placeholder="3.3" />
 					</label>
 				</div>
 				<p class="copy subtle">Decimal months are allowed. `0.5` is roughly two weeks, and both `3.3` and `3,3` work.</p>
+				{#if runAdvisories.length > 0}
+					<div class="advisories">
+						<strong>Worth knowing (the run can still start):</strong>
+						<ul>
+							{#each runAdvisories as advisory}
+								<li>{advisory}</li>
+							{/each}
+						</ul>
+					</div>
+				{/if}
 				{#if runBlockers.length > 0}
 					<div class="requirements">
 						<strong>Before you can start:</strong>
@@ -611,9 +811,41 @@
 				{/if}
 				<div class="actions">
 					<button class="primary" disabled={runLoading} on:click={handleStartAnalysis}>
-						{runLoading ? 'Queueing...' : savedAoiGeometry ? 'Start analysis' : 'Save AOI first'}
+						{runLoading
+							? coverageChecking
+								? 'Checking coverage...'
+								: 'Queueing...'
+							: savedAoiGeometry
+								? 'Start analysis'
+								: 'Save AOI first'}
+					</button>
+					<button
+						class="secondary"
+						disabled={coverageChecking || runLoading || !savedAoiGeometry}
+						on:click={() => void checkCoverage()}
+					>
+						{coverageChecking ? 'Checking...' : 'Check imagery coverage'}
 					</button>
 				</div>
+				{#if coverageCheck}
+					{#if !coverageCheck.ok}
+						<p class="error">{coverageCheck.message}</p>
+					{:else if coverageCheck.coverage}
+						<div class="coverage-panel">
+							<strong>Radar imagery found</strong>
+							<p class="copy">
+								{coverageCheck.coverage.pre_scenes} baseline image{coverageCheck.coverage.pre_scenes === 1 ? '' : 's'}
+								({coverageCheck.coverage.pre_window[0]} → {coverageCheck.coverage.pre_window[1]}) and
+								{coverageCheck.coverage.post_scenes} post-war image{coverageCheck.coverage.post_scenes === 1 ? '' : 's'}
+								({coverageCheck.coverage.post_window[0]} → {coverageCheck.coverage.post_window[1]}) across
+								{coverageCheck.coverage.orbit_count} satellite orbit{coverageCheck.coverage.orbit_count === 1 ? '' : 's'}.
+							</p>
+							{#each coverageWarnings as warning}
+								<p class="coverage-warning">⚠ {warning}</p>
+							{/each}
+						</div>
+					{/if}
+				{/if}
 				{#if !canStartRun && primaryRunBlocker}
 					<p class="error action-hint">{primaryRunBlocker}</p>
 				{/if}
@@ -632,17 +864,58 @@
 				{:else if currentRun.status === 'queued' || currentRun.status === 'running'}
 					<div class="busy">
 						<strong>{currentRun.status === 'queued' ? 'Queued for processing' : 'PWTT is running now'}</strong>
-						<span>The maps will appear here when the run finishes.</span>
+						{#if currentRun.status === 'running' && currentRun.progress_stage}
+							<span>{currentRun.progress_stage}</span>
+						{/if}
+						<span>
+							{elapsedMinutes(currentRun.created_at, pollNow) < 1
+								? 'Started moments ago.'
+								: `Running for ${elapsedMinutes(currentRun.created_at, pollNow)} min.`}
+							Large areas can take 30+ minutes. The maps will appear here when the run finishes.
+						</span>
 					</div>
 				{:else if currentRun.status === 'failed'}
 					<p class="error">{currentRun.error_message ?? 'The analysis failed.'}</p>
+					<div class="actions">
+						<button class="secondary" disabled={retryingRunId === currentRun.id} on:click={() => retryRun(currentRun!.id)}>
+							{retryingRunId === currentRun.id ? 'Retrying...' : 'Retry'}
+						</button>
+					</div>
+					{#if retryError}
+						<p class="error">{retryError}</p>
+					{/if}
 				{:else}
 					<div class="metric-grid">
-						<div><span>Damaged area</span><strong>{currentRun.summary?.damaged_area_ha} ha</strong></div>
-						<div><span>Share of AOI</span><strong>{currentRun.summary?.damage_share_pct}%</strong></div>
-						<div><span>Mean T-score</span><strong>{currentRun.summary?.mean_t_score}</strong></div>
-						<div><span>Peak T-score</span><strong>{currentRun.summary?.max_t_score}</strong></div>
+						<div title="Total area of built-up pixels whose change statistic exceeds the threshold.">
+							<span>Damaged area</span><strong>{currentRun.summary?.damaged_area_ha} ha</strong>
+						</div>
+						<div
+							title={currentRun.summary?.built_area_ha != null
+								? `Damaged share of the ~${currentRun.summary.built_area_ha} ha of built-up land in this AOI. Farmland and water are excluded from the comparison.`
+								: 'Damaged share of the whole AOI (older run — includes farmland and water, so this understates urban damage).'}
+						>
+							<span>{currentRun.summary?.built_area_ha != null ? 'Share of built-up area' : 'Share of AOI'}</span>
+							<strong>{currentRun.summary?.damage_share_pct}%</strong>
+						</div>
+						<div title="Average change statistic across all built-up pixels. A confidence measure, not damage severity.">
+							<span>Mean T-score</span><strong>{currentRun.summary?.mean_t_score}</strong>
+						</div>
+						<div title="Strongest change statistic anywhere in the AOI. A confidence measure, not damage severity.">
+							<span>Peak T-score</span><strong>{currentRun.summary?.max_t_score}</strong>
+						</div>
 					</div>
+					{#if currentRun.summary?.coverage}
+						<p class="copy subtle">
+							Based on {currentRun.summary.coverage.pre_scenes} baseline and {currentRun.summary.coverage.post_scenes}
+							post-war radar image{currentRun.summary.coverage.post_scenes === 1 ? '' : 's'} across
+							{currentRun.summary.coverage.orbit_count} orbit{currentRun.summary.coverage.orbit_count === 1 ? '' : 's'}.
+							T-scores measure detection confidence — how clearly the radar signal changed — not how badly a structure is damaged.
+						</p>
+					{:else}
+						<p class="copy subtle">
+							T-scores measure detection confidence — how clearly the radar signal changed — not how badly a structure is damaged.
+						</p>
+					{/if}
 
 					{#if currentRun.summary?.buildings}
 						<div class="metric-grid building-grid">
@@ -656,6 +929,15 @@
 						</div>
 						{#if currentRun.summary.buildings.reason}
 							<p class="copy subtle">{currentRun.summary.buildings.reason}</p>
+						{/if}
+						{#if currentRun.summary.buildings.available}
+							<p class="copy subtle">
+								{#if currentRun.summary.buildings.min_building_area_m2}
+									Buildings smaller than {currentRun.summary.buildings.min_building_area_m2} m² (most single houses)
+									are not screened — they are below what the 10 m radar pixels can assess reliably.
+								{/if}
+								Severity tags (Elevated / High / Severe) rank detection confidence, not structural damage.
+							</p>
 						{/if}
 						{#if currentRun.summary.buildings.top_damaged_buildings?.length}
 							<div class="building-links">
@@ -700,6 +982,7 @@
 									title="PWTT"
 									imageUrl={currentRun.layers.pwtt_preview ?? ''}
 									showLegend={true}
+									legendTitle="Detection confidence"
 									legendItems={pwttLegend}
 									on:open={() =>
 										openImageViewer({
@@ -715,7 +998,14 @@
 					<div class="actions">
 						<a class="primary link" href={api.kmlUrl(currentRun.id)}>Export KML</a>
 						<a class="secondary link" href={api.pngUrl(currentRun.id)}>Export PNG</a>
+						<button class="secondary" type="button" on:click={() => reuseRunSettings(currentRun!)}>
+							Reuse these settings
+						</button>
 					</div>
+					<p class="copy subtle">
+						"Reuse these settings" loads this run's AOI and parameters back into steps 2–3 so you can tweak the
+						threshold or windows and compare a fresh run against this one.
+					</p>
 				{/if}
 			</section>
 		</div>
@@ -733,7 +1023,7 @@
 							<button class="history-item" on:click={() => openRun(run.id)}>
 								<div>
 									<strong>{run.aoi_name || `Run ${run.id}`}</strong>
-									<span>#{run.id}</span>
+									<span>#{run.id} · {formatRunDate(run.created_at)}</span>
 								</div>
 								<small>{run.status}</small>
 							</button>
@@ -1065,7 +1355,8 @@
 		color: var(--olive);
 	}
 
-	.requirements {
+	.requirements,
+	.advisories {
 		margin-top: 0.2rem;
 		padding: 0.9rem 1rem;
 		border-radius: 16px;
@@ -1073,19 +1364,53 @@
 		border: 1px solid rgba(196, 79, 29, 0.14);
 	}
 
-	.requirements strong {
+	.advisories {
+		background: rgba(246, 215, 67, 0.14);
+		border-color: rgba(142, 108, 0, 0.18);
+		margin-bottom: 0.75rem;
+	}
+
+	.requirements strong,
+	.advisories strong {
 		display: block;
 		margin-bottom: 0.45rem;
 	}
 
-	.requirements ul {
+	.requirements ul,
+	.advisories ul {
 		margin: 0;
 		padding-left: 1rem;
 		color: var(--muted);
 	}
 
-	.requirements li + li {
+	.requirements li + li,
+	.advisories li + li {
 		margin-top: 0.3rem;
+	}
+
+	.coverage-panel {
+		margin-top: 0.85rem;
+		padding: 0.9rem 1rem;
+		border-radius: 16px;
+		background: rgba(45, 127, 123, 0.08);
+		border: 1px solid rgba(45, 127, 123, 0.16);
+	}
+
+	.coverage-panel strong {
+		display: block;
+		margin-bottom: 0.35rem;
+		color: var(--teal);
+	}
+
+	.coverage-panel .copy {
+		margin-bottom: 0;
+	}
+
+	.coverage-warning {
+		margin: 0.5rem 0 0;
+		font-size: 0.88rem;
+		font-weight: 600;
+		color: #b45309;
 	}
 
 	.metric-grid,

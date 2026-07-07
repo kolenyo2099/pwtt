@@ -270,9 +270,15 @@ def _candidate_footprints(footprints: ee.FeatureCollection, image: ee.Image, aoi
     provider while still returning the buildings most likely to matter.
     """
 
+    # Screen slightly below the user's threshold (buildings average several
+    # pixels, so a qualifying mean can come from a mix above and below it).
+    # The floor keeps huge low-threshold queries affordable, but must never
+    # rise above the user's own threshold — otherwise lowering the threshold
+    # below 2.8 would silently exclude the very buildings the user asked for.
+    screening_level = min(threshold, max(threshold - 0.4, HOTSPOT_THRESHOLD_FLOOR))
     hotspot_mask = (
         image.select("T_statistic")
-        .gte(max(threshold - 0.4, HOTSPOT_THRESHOLD_FLOOR))
+        .gte(screening_level)
         .focalMax(HOTSPOT_BUFFER_METERS, "square", "meters")
         .selfMask()
     )
@@ -305,6 +311,7 @@ def score_buildings(aoi: ee.Geometry, image: ee.Image, threshold: float) -> dict
                 "total_buildings": 0,
                 "damaged_buildings": 0,
                 "damaged_share_pct": 0.0,
+                "min_building_area_m2": MIN_BUILDING_AREA_M2,
             },
         }
 
@@ -335,6 +342,7 @@ def score_buildings(aoi: ee.Geometry, image: ee.Image, threshold: float) -> dict
                 "damaged_buildings": 0,
                 "damaged_share_pct": 0.0,
                 "top_damaged_buildings": [],
+                "min_building_area_m2": MIN_BUILDING_AREA_M2,
             },
         }
 
@@ -372,6 +380,11 @@ def score_buildings(aoi: ee.Geometry, image: ee.Image, threshold: float) -> dict
         longitude, latitude = _geometry_center(feature.get("geometry", {}))
         category = _damage_category(score, threshold)
 
+        # The score is the mean T statistic inside the footprint — a detection
+        # confidence, not a calibrated probability or a severity measure.
+        # "mean_t" is the honest name; "damage_probability" is kept so older
+        # caches, exports, and downstream consumers keep working.
+        properties["mean_t"] = score
         properties["damage_probability"] = score
         properties["damaged"] = 1
         properties["category"] = category
@@ -403,6 +416,7 @@ def score_buildings(aoi: ee.Geometry, image: ee.Image, threshold: float) -> dict
             "damaged_buildings": damaged_buildings,
             "damaged_share_pct": damaged_share,
             "top_damaged_buildings": top_damaged[:TOP_DAMAGED_LIMIT],
+            "min_building_area_m2": MIN_BUILDING_AREA_M2,
         },
     }
 
@@ -436,6 +450,7 @@ def enrich_cached_buildings(
         longitude, latitude = _geometry_center(copied_feature.get("geometry", {}) or {})
         category = _damage_category(score, threshold)
 
+        properties["mean_t"] = score
         properties["damage_probability"] = score
         properties["category"] = category
         properties["longitude"] = longitude

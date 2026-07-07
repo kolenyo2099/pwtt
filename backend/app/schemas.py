@@ -93,8 +93,11 @@ class RunCreateInput(BaseModel):
     aoi_geojson: dict[str, Any]
     war_start: str
     inference_start: str
+    # Ballinger (2025) uses a 1-year baseline (averages over seasonal effects)
+    # and a 2-month post window (~5 scenes per orbit). Shorter windows are
+    # allowed — the UI warns about the reduced sample instead of blocking.
     pre_interval: float = 12
-    post_interval: float = 1
+    post_interval: float = 2
     threshold: float = 3.3
     method: RunMethod = "stouffer"
 
@@ -170,14 +173,19 @@ class RunSummary(BaseModel):
     created_at: datetime
     updated_at: datetime
     error_message: str | None = None
+    progress_stage: str | None = None
 
 
 class LayerUrls(BaseModel):
-    """Tile layers used to render the pre, post, and PWTT result maps."""
+    """Image layers used to render the pre, post, and PWTT result panels.
 
-    pre_event: str
-    post_event: str
-    pwtt_overlay: str
+    Completed runs are served from cached preview PNGs; the tile-layer fields
+    are only populated on the legacy fallback path for runs without caches.
+    """
+
+    pre_event: str | None = None
+    post_event: str | None = None
+    pwtt_overlay: str | None = None
     buildings_overlay: str | None = None
     pre_event_preview: str | None = None
     post_event_preview: str | None = None
@@ -194,16 +202,44 @@ class BuildingResultSummary(BaseModel):
     damaged_share_pct: float
     asset_ids: list[str] | None = None
     top_damaged_buildings: list[dict[str, str | float]] | None = None
+    min_building_area_m2: int | None = None
+
+
+class CoverageSummary(BaseModel):
+    """Sentinel-1 scene counts for the chosen windows.
+
+    The t-test runs independently per satellite orbit, so the per-orbit
+    minimums describe the weakest statistical sample feeding the result.
+    """
+
+    pre_scenes: int
+    post_scenes: int
+    orbit_count: int
+    min_pre_scenes_per_orbit: int
+    min_post_scenes_per_orbit: int
+    pre_window: list[str]
+    post_window: list[str]
+
+
+class PreflightOutput(BaseModel):
+    """The result of checking imagery coverage before queueing a run."""
+
+    ok: bool
+    message: str | None = None
+    coverage: CoverageSummary | None = None
 
 
 class RunResultSummary(BaseModel):
     """A non-technical summary of what the model found."""
 
     damaged_area_ha: float
+    built_area_ha: float | None = None
     damage_share_pct: float
+    aoi_share_pct: float | None = None
     mean_t_score: float
     max_t_score: float
     damaged_pixel_estimate: int
+    coverage: CoverageSummary | None = None
     buildings: BuildingResultSummary | None = None
 
 
