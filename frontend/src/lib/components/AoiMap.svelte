@@ -280,7 +280,7 @@
 
 	.map {
 		width: 100%;
-		height: 26rem;
+		height: min(38rem, 60vh);
 		border-radius: 12px;
 		overflow: hidden;
 		border: 1px solid rgba(20, 36, 58, 0.14);

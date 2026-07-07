@@ -627,7 +627,7 @@
 		</section>
 
 		<div class="cards">
-			<section class="card">
+			<section class="card step-auth">
 				<header>
 					<span class="step-tag">Step 1</span>
 					<h3>Authenticate and store access</h3>
@@ -666,7 +666,7 @@
 				{/if}
 			</section>
 
-			<section class="card">
+			<section class="card step-aoi">
 				<header>
 					<span class="step-tag">Step 2</span>
 					<h3>Select the area of interest</h3>
@@ -710,7 +710,7 @@
 				{/if}
 			</section>
 
-			<section class="card">
+			<section class="card step-run">
 				<header>
 					<span class="step-tag">Step 3</span>
 					<h3>Run the PWTT pipeline</h3>
@@ -1148,10 +1148,30 @@
 		font-family: 'IBM Plex Mono', monospace;
 	}
 
+	/* The AOI map needs real room to draw in; the auth and run-parameter forms
+	   are short and fixed in height. Give the map a wider column and let it
+	   span both rows of the compact forms stacked beside it, instead of
+	   forcing all four cards into equal-sized grid cells. */
 	.cards {
 		display: grid;
-		grid-template-columns: repeat(2, minmax(0, 1fr));
+		grid-template-columns: minmax(0, 1fr) minmax(0, 1.6fr);
 		gap: 0.9rem;
+		align-items: start;
+	}
+
+	.step-auth {
+		grid-column: 1;
+		grid-row: 1;
+	}
+
+	.step-run {
+		grid-column: 1;
+		grid-row: 2;
+	}
+
+	.step-aoi {
+		grid-column: 2;
+		grid-row: 1 / 3;
 	}
 
 	.card,
@@ -1360,6 +1380,7 @@
 
 	.results {
 		grid-column: 1 / -1;
+		grid-row: 3;
 	}
 
 	.busy {
@@ -1562,8 +1583,14 @@
 			grid-template-columns: 1fr;
 		}
 
+		/* Below the breakpoint there's no spare width for a side-by-side
+		   layout, so fall back to DOM order: auth, AOI, run, results. */
+		.step-auth,
+		.step-aoi,
+		.step-run,
 		.results {
 			grid-column: auto;
+			grid-row: auto;
 		}
 	}
 
