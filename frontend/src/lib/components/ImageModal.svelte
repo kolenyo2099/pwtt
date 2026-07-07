@@ -35,7 +35,7 @@
 		display: grid;
 		place-items: center;
 		padding: 1rem;
-		background: rgba(18, 24, 32, 0.6);
+		background: rgba(1, 1, 51, 0.65);
 		backdrop-filter: blur(8px);
 	}
 
@@ -44,9 +44,10 @@
 		max-height: calc(100vh - 2rem);
 		overflow: auto;
 		padding: 1rem;
-		border-radius: 24px;
-		background: #f8f5ef;
-		box-shadow: 0 24px 80px rgba(18, 24, 32, 0.3);
+		border-radius: 12px;
+		background: #f4f6f8;
+		border-top: 3px solid var(--gold);
+		box-shadow: 0 24px 80px rgba(1, 1, 51, 0.35);
 	}
 
 	.dialog-head {
@@ -57,10 +58,16 @@
 		margin-bottom: 0.8rem;
 	}
 
+	.dialog-head strong {
+		font-family: 'Source Serif 4', serif;
+		font-size: 1.1rem;
+	}
+
 	button {
 		padding: 0.55rem 0.8rem;
-		border: 1px solid rgba(29, 41, 53, 0.14);
+		border: 1px solid rgba(20, 36, 58, 0.16);
 		border-radius: 999px;
 		background: white;
+		color: var(--blue-accent);
 	}
 </style>

@@ -584,9 +584,9 @@
 		// The same cutoffs the building categories use (threshold, +0.75, +1.5),
 		// so the map legend and the building chips always agree.
 		pwttLegend = [
-			{ color: '#f6d743', label: `Elevated (T ≥ ${+base.toFixed(2)})` },
-			{ color: '#e85d04', label: `High (T ≥ ${+(base + 0.75).toFixed(2)})` },
-			{ color: '#5f0f40', label: `Severe (T ≥ ${+(base + 1.5).toFixed(2)})` }
+			{ color: '#fdb515', label: `Elevated (T ≥ ${+base.toFixed(2)})` },
+			{ color: '#d9661f', label: `High (T ≥ ${+(base + 0.75).toFixed(2)})` },
+			{ color: '#770747', label: `Severe (T ≥ ${+(base + 1.5).toFixed(2)})` }
 		];
 	}
 	$: if (aoiGeometry) {
@@ -614,7 +614,7 @@
 			<div>
 				<p class="eyebrow">PWTT Wizard</p>
 				<h2>Set up authentication, choose an area, and run the analysis.</h2>
-				<p class="copy subtle">Based on <a href="https://www.sciencedirect.com/science/article/pii/S0034425725004298" target="_blank" rel="noreferrer">Ballinger 2025</a></p>
+				<p class="copy subtle citation">Ballinger, O. (2025). Open access battle damage detection via Pixel-Wise T-Test on Sentinel-1 imagery. <a href="https://www.sciencedirect.com/science/article/pii/S0034425725004298" target="_blank" rel="noreferrer">Remote Sensing of Environment, 331</a>.</p>
 			</div>
 			<div class="status-grid">
 				<div><span>Saved auth</span><strong>{authReady ? 'Ready' : hasSavedProject ? 'Login needed' : 'Missing'}</strong></div>
@@ -1079,7 +1079,7 @@
 	.card,
 	.history {
 		border: 1px solid var(--line);
-		border-radius: 24px;
+		border-radius: 12px;
 		background: var(--panel);
 		backdrop-filter: blur(18px);
 		box-shadow: var(--shadow);
@@ -1096,11 +1096,17 @@
 
 	.eyebrow,
 	.step-tag {
+		font-family: 'IBM Plex Mono', monospace;
 		text-transform: uppercase;
 		letter-spacing: 0.08em;
-		font-size: 0.78rem;
-		font-weight: 700;
-		color: var(--accent);
+		font-size: 0.76rem;
+		font-weight: 600;
+		color: var(--gold-ink);
+	}
+
+	.citation {
+		font-family: 'Source Serif 4', serif;
+		font-style: italic;
 	}
 
 	h2 {
@@ -1118,9 +1124,9 @@
 	.status-grid div,
 	.metric-grid div {
 		padding: 0.75rem 0.8rem;
-		border-radius: 18px;
-		background: rgba(255, 253, 248, 0.82);
-		border: 1px solid rgba(29, 41, 53, 0.08);
+		border-radius: 10px;
+		background: rgba(255, 255, 255, 0.85);
+		border: 1px solid rgba(20, 36, 58, 0.08);
 	}
 
 	.status-grid span,
@@ -1138,6 +1144,10 @@
 		font-size: 0.96rem;
 	}
 
+	.metric-grid strong {
+		font-family: 'IBM Plex Mono', monospace;
+	}
+
 	.cards {
 		display: grid;
 		grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -1149,10 +1159,14 @@
 		padding: 1.1rem;
 	}
 
+	/* The gold rule under every card header is the recurring "running head"
+	   motif — a nod to section headers in a printed paper. */
 	header {
 		display: grid;
 		gap: 0.25rem;
 		margin-bottom: 0.75rem;
+		border-bottom: 2px solid rgba(253, 181, 21, 0.45);
+		padding-bottom: 0.55rem;
 	}
 
 	.copy {
@@ -1201,9 +1215,9 @@
 		height: 1.1rem;
 		padding: 0;
 		border-radius: 50%;
-		border: 1px solid rgba(29, 41, 53, 0.18);
-		background: rgba(45, 127, 123, 0.08);
-		color: var(--teal);
+		border: 1px solid rgba(20, 36, 58, 0.2);
+		background: rgba(0, 74, 174, 0.08);
+		color: var(--blue-accent);
 		font-size: 0.72rem;
 		font-weight: 700;
 		line-height: 1;
@@ -1217,8 +1231,8 @@
 		transform: translateY(-50%);
 		width: 15rem;
 		padding: 0.65rem 0.75rem;
-		border-radius: 12px;
-		background: rgba(29, 41, 53, 0.96);
+		border-radius: 8px;
+		background: rgba(20, 36, 58, 0.96);
 		color: white;
 		font-size: 0.78rem;
 		font-weight: 500;
@@ -1226,7 +1240,7 @@
 		text-align: left;
 		opacity: 0;
 		pointer-events: none;
-		box-shadow: 0 18px 36px rgba(29, 41, 53, 0.22);
+		box-shadow: 0 18px 36px rgba(20, 36, 58, 0.22);
 		z-index: 10;
 	}
 
@@ -1238,7 +1252,7 @@
 		transform: translateY(-50%);
 		border-top: 6px solid transparent;
 		border-bottom: 6px solid transparent;
-		border-right: 6px solid rgba(29, 41, 53, 0.96);
+		border-right: 6px solid rgba(20, 36, 58, 0.96);
 		opacity: 0;
 		pointer-events: none;
 		z-index: 10;
@@ -1254,16 +1268,16 @@
 	input,
 	select {
 		padding: 0.78rem 0.9rem;
-		border-radius: 14px;
-		border: 1px solid rgba(29, 41, 53, 0.12);
+		border-radius: 8px;
+		border: 1px solid rgba(20, 36, 58, 0.14);
 		background: var(--panel-strong);
 		color: var(--ink);
 	}
 
 	.credential-card {
 		padding: 0.78rem 0.9rem;
-		border-radius: 14px;
-		border: 1px solid rgba(29, 41, 53, 0.12);
+		border-radius: 8px;
+		border: 1px solid rgba(20, 36, 58, 0.14);
 		background: var(--panel-strong);
 		align-content: start;
 	}
@@ -1301,14 +1315,14 @@
 	}
 
 	.primary {
-		background: linear-gradient(135deg, var(--accent), #df8a47);
-		color: white;
+		background: linear-gradient(135deg, var(--gold), #ffc94d);
+		color: var(--navy);
 		font-weight: 700;
 	}
 
 	.secondary {
-		background: rgba(45, 127, 123, 0.12);
-		color: var(--teal);
+		background: rgba(0, 74, 174, 0.1);
+		color: var(--blue-accent);
 		font-weight: 700;
 	}
 
@@ -1319,12 +1333,12 @@
 
 	.success {
 		margin-top: 0.9rem;
-		color: var(--olive);
+		color: var(--success);
 	}
 
 	.error {
 		margin-top: 0.9rem;
-		color: #a13624;
+		color: var(--danger);
 		font-weight: 600;
 	}
 
@@ -1335,12 +1349,12 @@
 	}
 
 	.aoi-size-warn {
-		color: #b45309;
+		color: var(--gold-ink);
 		font-weight: 600;
 	}
 
 	.aoi-size-block {
-		color: #a13624;
+		color: var(--danger);
 		font-weight: 700;
 	}
 
@@ -1350,23 +1364,23 @@
 
 	.busy {
 		padding: 0.9rem 1rem;
-		border-radius: 18px;
-		background: rgba(83, 98, 79, 0.08);
-		color: var(--olive);
+		border-radius: 10px;
+		background: rgba(0, 85, 58, 0.08);
+		color: var(--success);
 	}
 
 	.requirements,
 	.advisories {
 		margin-top: 0.2rem;
 		padding: 0.9rem 1rem;
-		border-radius: 16px;
-		background: rgba(244, 201, 153, 0.2);
-		border: 1px solid rgba(196, 79, 29, 0.14);
+		border-radius: 10px;
+		background: rgba(217, 102, 31, 0.12);
+		border: 1px solid rgba(138, 90, 0, 0.22);
 	}
 
 	.advisories {
-		background: rgba(246, 215, 67, 0.14);
-		border-color: rgba(142, 108, 0, 0.18);
+		background: rgba(253, 181, 21, 0.12);
+		border-color: rgba(138, 90, 0, 0.22);
 		margin-bottom: 0.75rem;
 	}
 
@@ -1391,15 +1405,15 @@
 	.coverage-panel {
 		margin-top: 0.85rem;
 		padding: 0.9rem 1rem;
-		border-radius: 16px;
-		background: rgba(45, 127, 123, 0.08);
-		border: 1px solid rgba(45, 127, 123, 0.16);
+		border-radius: 10px;
+		background: rgba(0, 74, 174, 0.07);
+		border: 1px solid rgba(0, 74, 174, 0.16);
 	}
 
 	.coverage-panel strong {
 		display: block;
 		margin-bottom: 0.35rem;
-		color: var(--teal);
+		color: var(--blue-accent);
 	}
 
 	.coverage-panel .copy {
@@ -1410,7 +1424,7 @@
 		margin: 0.5rem 0 0;
 		font-size: 0.88rem;
 		font-weight: 600;
-		color: #b45309;
+		color: var(--gold-ink);
 	}
 
 	.metric-grid,
@@ -1437,9 +1451,9 @@
 		gap: 0.8rem;
 		margin: 0 0 1rem;
 		padding: 1rem 1.05rem;
-		border-radius: 18px;
-		background: rgba(255, 250, 240, 0.85);
-		border: 1px solid rgba(29, 41, 53, 0.08);
+		border-radius: 10px;
+		background: rgba(255, 255, 255, 0.9);
+		border: 1px solid rgba(20, 36, 58, 0.08);
 	}
 
 	.building-links strong {
@@ -1458,7 +1472,7 @@
 		gap: 0.5rem;
 		padding: 0.55rem 0.75rem;
 		border-radius: 999px;
-		border: 1px solid rgba(29, 41, 53, 0.08);
+		border: 1px solid rgba(20, 36, 58, 0.08);
 		background: rgba(255, 255, 255, 0.9);
 		color: var(--ink);
 		text-decoration: none;
@@ -1466,6 +1480,7 @@
 
 	.building-chip small {
 		color: var(--muted);
+		font-family: 'IBM Plex Mono', monospace;
 	}
 
 	.building-tag {
@@ -1480,18 +1495,18 @@
 	}
 
 	.building-tag.elevated {
-		background: rgba(246, 215, 67, 0.25);
-		color: #8e6c00;
+		background: rgba(253, 181, 21, 0.22);
+		color: var(--gold-ink);
 	}
 
 	.building-tag.high {
-		background: rgba(232, 93, 4, 0.18);
-		color: #ad4300;
+		background: rgba(217, 102, 31, 0.18);
+		color: #a84a15;
 	}
 
 	.building-tag.severe {
-		background: rgba(95, 15, 64, 0.16);
-		color: #5f0f40;
+		background: rgba(119, 7, 71, 0.16);
+		color: #770747;
 	}
 
 	.history-list {
@@ -1511,21 +1526,21 @@
 		justify-content: space-between;
 		align-items: center;
 		padding: 0.8rem 0.9rem;
-		border-radius: 14px;
-		border: 1px solid rgba(29, 41, 53, 0.08);
-		background: rgba(255, 253, 248, 0.85);
+		border-radius: 8px;
+		border: 1px solid rgba(20, 36, 58, 0.08);
+		background: rgba(255, 255, 255, 0.85);
 	}
 
 	.ghost {
 		padding: 0.65rem 0.9rem;
 		border-radius: 999px;
-		border: 1px solid rgba(29, 41, 53, 0.1);
-		background: rgba(255, 253, 248, 0.85);
+		border: 1px solid rgba(20, 36, 58, 0.12);
+		background: rgba(255, 255, 255, 0.85);
 		color: var(--ink);
 	}
 
 	.danger {
-		color: #a13624;
+		color: var(--danger);
 	}
 
 	.history-item strong {
@@ -1533,10 +1548,11 @@
 	}
 
 	.history-item small {
+		font-family: 'IBM Plex Mono', monospace;
 		text-transform: uppercase;
 		font-weight: 700;
 		letter-spacing: 0.06em;
-		color: var(--accent);
+		color: var(--gold-ink);
 	}
 
 	@media (max-width: 1380px) {

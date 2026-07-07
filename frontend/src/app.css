@@ -1,19 +1,36 @@
-@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@500;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600;700&family=Source+Serif+4:opsz,wght@8..60,500;8..60,600;8..60,700&display=swap');
 @import 'leaflet/dist/leaflet.css';
 @import 'leaflet-draw/dist/leaflet.draw.css';
 
 :root {
-	--bg: #f2efe8;
-	--panel: rgba(255, 255, 255, 0.84);
-	--panel-strong: #fffdf8;
-	--ink: #1d2935;
-	--muted: #5c6773;
-	--line: rgba(29, 41, 53, 0.12);
-	--accent: #c44f1d;
-	--accent-soft: #f4c999;
-	--olive: #53624f;
-	--teal: #2d7f7b;
-	--shadow: 0 24px 60px rgba(29, 41, 53, 0.12);
+	/* UC Berkeley identity: Berkeley Blue + California Gold are the two
+	   official primary colors; Blue Medium and Green Dark are official
+	   secondary colors used here for interactive and success states.
+	   https://brand.berkeley.edu/visual-identity/colors/ */
+	--navy: #003262;
+	--navy-deep: #010133;
+	--gold: #fdb515;
+	/* Gold fails text contrast on light backgrounds, so labels set in the
+	   gold "family" use this darkened, WCAG-safe tint instead — gold itself
+	   stays reserved for fills, rules, and borders. */
+	--gold-ink: #8a5a00;
+	--blue-accent: #004aae;
+	--success: #00553a;
+
+	/* Damage-severity ramp: mirrors the mild-to-severe, light-to-dark logic
+	   of standard hazard maps, built from official Berkeley secondary colors. */
+	--tier-elevated: #fdb515;
+	--tier-high: #d9661f;
+	--tier-severe: #770747;
+
+	--bg: #f1f3f6;
+	--panel: rgba(255, 255, 255, 0.86);
+	--panel-strong: #ffffff;
+	--ink: #142338;
+	--muted: #57687a;
+	--line: rgba(20, 36, 58, 0.14);
+	--danger: #a13624;
+	--shadow: 0 24px 60px rgba(20, 36, 58, 0.14);
 }
 
 html,
@@ -21,9 +38,9 @@ body {
 	margin: 0;
 	min-height: 100%;
 	background:
-		radial-gradient(circle at 20% 20%, rgba(196, 79, 29, 0.2), transparent 28%),
-		radial-gradient(circle at 80% 0%, rgba(45, 127, 123, 0.18), transparent 24%),
-		linear-gradient(180deg, #e9e2d4 0%, var(--bg) 45%, #ebe7de 100%);
+		radial-gradient(circle at 20% 20%, rgba(0, 50, 98, 0.12), transparent 30%),
+		radial-gradient(circle at 80% 0%, rgba(253, 181, 21, 0.14), transparent 24%),
+		linear-gradient(180deg, #e7ebef 0%, var(--bg) 45%, #eceff2 100%);
 	color: var(--ink);
 	font-family: 'IBM Plex Sans', sans-serif;
 }
@@ -36,7 +53,7 @@ h1,
 h2,
 h3,
 h4 {
-	font-family: 'Space Grotesk', sans-serif;
+	font-family: 'Source Serif 4', serif;
 	margin: 0;
 }
 
@@ -54,4 +71,3 @@ button {
 .leaflet-container {
 	font-family: 'IBM Plex Sans', sans-serif;
 }
-

@@ -238,9 +238,9 @@
 
 	.search-bar input {
 		padding: 0.78rem 0.9rem;
-		border-radius: 14px;
-		border: 1px solid rgba(29, 41, 53, 0.12);
-		background: rgba(255, 253, 248, 0.9);
+		border-radius: 8px;
+		border: 1px solid rgba(20, 36, 58, 0.14);
+		background: rgba(255, 255, 255, 0.92);
 		color: var(--ink);
 	}
 
@@ -253,8 +253,8 @@
 	.search-button {
 		padding: 0.78rem 1rem;
 		border-radius: 999px;
-		background: rgba(45, 127, 123, 0.12);
-		color: var(--teal);
+		background: rgba(0, 74, 174, 0.12);
+		color: var(--blue-accent);
 		font-weight: 700;
 	}
 
@@ -265,10 +265,10 @@
 
 	.search-result {
 		padding: 0.72rem 0.85rem;
-		border-radius: 12px;
+		border-radius: 8px;
 		text-align: left;
-		background: rgba(255, 253, 248, 0.9);
-		border: 1px solid rgba(29, 41, 53, 0.08);
+		background: rgba(255, 255, 255, 0.92);
+		border: 1px solid rgba(20, 36, 58, 0.1);
 		color: var(--ink);
 	}
 
@@ -281,9 +281,9 @@
 	.map {
 		width: 100%;
 		height: 26rem;
-		border-radius: 28px;
+		border-radius: 12px;
 		overflow: hidden;
-		border: 1px solid rgba(29, 41, 53, 0.12);
+		border: 1px solid rgba(20, 36, 58, 0.14);
 	}
 
 	@media (max-width: 720px) {

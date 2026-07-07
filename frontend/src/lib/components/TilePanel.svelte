@@ -73,14 +73,14 @@
 		display: grid;
 		gap: 0.85rem;
 		padding: 0.8rem;
-		border-radius: 28px;
+		border-radius: 12px;
 		background:
-			linear-gradient(180deg, rgba(255, 253, 248, 0.98), rgba(241, 237, 228, 0.94)),
-			radial-gradient(circle at top, rgba(244, 201, 153, 0.18), transparent 55%);
-		border: 1px solid rgba(29, 41, 53, 0.08);
+			linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(241, 244, 247, 0.94)),
+			radial-gradient(circle at top, rgba(0, 50, 98, 0.06), transparent 55%);
+		border: 1px solid rgba(20, 36, 58, 0.1);
 		box-shadow:
 			inset 0 1px 0 rgba(255, 255, 255, 0.82),
-			0 18px 34px rgba(29, 41, 53, 0.08);
+			0 18px 34px rgba(20, 36, 58, 0.08);
 	}
 
 	.panel-head {
@@ -92,15 +92,15 @@
 
 	.image-shell {
 		aspect-ratio: 1.18 / 1;
-		border-radius: 22px;
+		border-radius: 10px;
 		overflow: hidden;
-		border: 1px solid rgba(29, 41, 53, 0.12);
+		border: 1px solid rgba(20, 36, 58, 0.14);
 		background:
-			linear-gradient(180deg, rgba(212, 210, 204, 0.82), rgba(233, 230, 223, 0.74)),
+			linear-gradient(180deg, rgba(206, 212, 218, 0.82), rgba(228, 232, 236, 0.74)),
 			radial-gradient(circle at top, rgba(255, 255, 255, 0.32), transparent 58%);
 		box-shadow:
 			inset 0 0 0 1px rgba(255, 255, 255, 0.35),
-			0 6px 16px rgba(29, 41, 53, 0.08);
+			0 6px 16px rgba(20, 36, 58, 0.08);
 	}
 
 	.image {
@@ -133,35 +133,37 @@
 
 	.expanded-image {
 		object-fit: contain;
-		background: #eeeadf;
+		background: #e7ebef;
 	}
 
 	.panel-open {
 		padding: 0.45rem 0.7rem;
 		border-radius: 999px;
-		border: 1px solid rgba(29, 41, 53, 0.14);
-		background: rgba(255, 253, 248, 0.9);
-		color: var(--ink);
+		border: 1px solid rgba(20, 36, 58, 0.16);
+		background: rgba(255, 255, 255, 0.92);
+		color: var(--blue-accent);
 		font-size: 0.8rem;
 	}
 
 	.caption {
-		font-family: 'Space Grotesk', sans-serif;
+		font-family: 'Source Serif 4', serif;
 		font-size: 1.25rem;
-		font-weight: 700;
+		font-weight: 600;
 	}
 
 	.legend {
 		display: grid;
 		gap: 0.45rem;
-		padding: 0.25rem 0.1rem 0;
+		padding: 0.35rem 0.1rem 0;
+		border-top: 2px solid var(--gold);
 	}
 
 	.legend strong {
-		font-size: 0.85rem;
-		color: var(--muted);
+		font-family: 'IBM Plex Mono', monospace;
+		font-size: 0.78rem;
+		color: var(--gold-ink);
 		text-transform: uppercase;
-		letter-spacing: 0.06em;
+		letter-spacing: 0.08em;
 	}
 
 	.legend-row {

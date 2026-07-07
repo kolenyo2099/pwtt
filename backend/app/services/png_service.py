@@ -18,7 +18,8 @@ from .buildings_service import building_outline_images
 
 
 RGB_VIS = {"bands": ["B4", "B3", "B2"], "min": 0.02, "max": 0.35, "gamma": 1.2}
-PWTT_VIS = {"min": 1.8, "max": 5.0, "palette": ["#f6d743", "#e85d04", "#5f0f40"], "opacity": 0.62}
+# UC Berkeley severity ramp — California Gold, Wellman Tile, Rose Dark.
+PWTT_VIS = {"min": 1.8, "max": 5.0, "palette": ["#fdb515", "#d9661f", "#770747"], "opacity": 0.62}
 
 
 def _fetch_png(url: str) -> Image.Image:
@@ -77,7 +78,7 @@ def _fetch_panels(
         pwtt_panel_image = (
             pwtt_panel_image
             .blend(outlines.visualize(palette=["ffffff"], opacity=0.95))
-            .blend(damaged_outlines.visualize(palette=["ff4d2d"], opacity=1.0))
+            .blend(damaged_outlines.visualize(palette=["d9661f"], opacity=1.0))
         )
     pwtt_panel = _panel_image(pwtt_panel_image, region, width)
 
@@ -93,7 +94,7 @@ def _compose_triptych(pre: Image.Image, post: Image.Image, pwtt: Image.Image) ->
     canvas = Image.new(
         "RGBA",
         (panel_width * 3 + gutter * 4, panel_height + title_height + gutter * 2),
-        "#f8f5ef",
+        "#f1f3f6",
     )
     draw = ImageDraw.Draw(canvas)
     font = ImageFont.load_default()
@@ -103,7 +104,7 @@ def _compose_triptych(pre: Image.Image, post: Image.Image, pwtt: Image.Image) ->
         x = gutter + index * (panel_width + gutter)
         y = gutter + title_height
         canvas.paste(image, (x, y))
-        draw.text((x, gutter + 8), title, fill="#1d2935", font=font)
+        draw.text((x, gutter + 8), title, fill="#142338", font=font)
 
     buffer = BytesIO()
     canvas.convert("RGB").save(buffer, format="PNG", optimize=True)

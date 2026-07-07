@@ -8,10 +8,10 @@ from typing import Any
 import simplekml
 
 # KML colors are AABBGGRR. These match the UI overlay palette exactly:
-# #f6d743 → b443d7f6, #e85d04 → b4045de8, #5f0f40 → b4400f5f
-_COLOR_ELEVATED = "b443d7f6"
-_COLOR_HIGH = "b4045de8"
-_COLOR_SEVERE = "b4400f5f"
+# #fdb515 → b415b5fd, #d9661f → b41f66d9, #770747 → b4470777
+_COLOR_ELEVATED = "b415b5fd"
+_COLOR_HIGH = "b41f66d9"
+_COLOR_SEVERE = "b4470777"
 
 
 def _polygon_color(category: str | None) -> str:

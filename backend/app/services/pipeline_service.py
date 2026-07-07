@@ -21,7 +21,8 @@ from ..repositories.runs_repository import touch_run_heartbeat, update_run_summa
 from ..settings import settings
 
 
-OVERLAY_PALETTE = ["#f6d743", "#e85d04", "#5f0f40"]
+# UC Berkeley severity ramp — California Gold, Wellman Tile, Rose Dark.
+OVERLAY_PALETTE = ["#fdb515", "#d9661f", "#770747"]
 PREVIEW_WIDTH = 1200
 STALE_BUILDING_REASON_MARKERS = (
     "Draw a smaller AOI",
@@ -257,11 +258,11 @@ def _build_layers(
         pwtt_preview_image = (
             pwtt_preview_image
             .blend(outlines.visualize(palette=["ffffff"], opacity=0.95))
-            .blend(damaged_outlines.visualize(palette=["ff4d2d"], opacity=1.0))
+            .blend(damaged_outlines.visualize(palette=["d9661f"], opacity=1.0))
         )
         buildings_overlay_url = make_tile_url(
             outlines.visualize(palette=["ffffff"], opacity=0.95).blend(
-                damaged_outlines.visualize(palette=["ff4d2d"], opacity=1.0)
+                damaged_outlines.visualize(palette=["d9661f"], opacity=1.0)
             ),
             {},
         )
