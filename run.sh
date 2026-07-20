@@ -23,9 +23,9 @@ export VITE_API_BASE_URL="${VITE_API_BASE_URL:-http://127.0.0.1:${BACKEND_PORT}}
 source .venv/bin/activate
 
 if lsof -tiTCP:"$BACKEND_PORT" -sTCP:LISTEN >/dev/null 2>&1; then
-  echo "Port $BACKEND_PORT is already in use. Stop the existing process first so PWTT does not talk to the wrong backend."
-  lsof -nP -iTCP:"$BACKEND_PORT" -sTCP:LISTEN
-  exit 1
+  echo "Port $BACKEND_PORT in use — killing existing process..."
+  lsof -tiTCP:"$BACKEND_PORT" -sTCP:LISTEN | xargs kill
+  sleep 1
 fi
 
 cleanup() {
@@ -39,4 +39,4 @@ trap cleanup EXIT INT TERM
 python -m uvicorn backend.app.main:app --reload --host "$BACKEND_HOST" --port "$BACKEND_PORT" &
 BACKEND_PID=$!
 
-npm --prefix frontend run dev -- --host 0.0.0.0 --port "$FRONTEND_PORT"
+npm --prefix frontend run dev -- --host 0.0.0.0 --port "$FRONTEND_PORT" --strictPort

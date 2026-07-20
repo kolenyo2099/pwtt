@@ -14,3 +14,10 @@ frontend/.svelte-kit/
 frontend/build/
 frontend/.vite/
 
+# Agent guidelines are local-only; never commit them
+AGENTS.md
+agents.md
+
+# Generated pipeline outputs are runtime artifacts, not source
+backend/data/run_cache/
+

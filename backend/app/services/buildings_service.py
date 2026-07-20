@@ -221,7 +221,13 @@ def _fetch_features_paginated(
     # Only reached for very dense urban areas where even the filtered set is large.
     _TILE_DEG = 0.25
     bounds_info = feature_collection.geometry().bounds(1).getInfo()
+    if not bounds_info or not bounds_info.get("coordinates"):
+        return {"type": "FeatureCollection", "features": []}
+
     ring = bounds_info["coordinates"][0]
+    if not ring:
+        return {"type": "FeatureCollection", "features": []}
+
     min_lon = min(c[0] for c in ring)
     max_lon = max(c[0] for c in ring)
     min_lat = min(c[1] for c in ring)
@@ -328,6 +334,21 @@ def score_buildings(aoi: ee.Geometry, image: ee.Image, threshold: float) -> dict
     )
 
     total_buildings = int(ee.Number(footprints.size()).getInfo())
+    if total_buildings == 0:
+        return {
+            "feature_collection": {"type": "FeatureCollection", "features": []},
+            "summary": {
+                "available": True,
+                "reason": "No Microsoft building footprints larger than the minimum area were found in this AOI.",
+                "asset_ids": asset_ids,
+                "total_buildings": 0,
+                "damaged_buildings": 0,
+                "damaged_share_pct": 0.0,
+                "top_damaged_buildings": [],
+                "min_building_area_m2": MIN_BUILDING_AREA_M2,
+            },
+        }
+
     candidate_footprints = _candidate_footprints(footprints, image, aoi, threshold)
     candidate_count = int(ee.Number(candidate_footprints.size()).getInfo())
 

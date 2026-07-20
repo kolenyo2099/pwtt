@@ -46,5 +46,11 @@ class AppSettings(BaseSettings):
             f"http://127.0.0.1:{self.frontend_port}",
         ]
 
+    @property
+    def cors_origin_regex(self) -> str:
+        """Allow local dev frontends even when Vite falls back to another port."""
+
+        return r"^http://(localhost|127\.0\.0\.1):\d+$"
+
 
 settings = AppSettings()

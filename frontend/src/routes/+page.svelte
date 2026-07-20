@@ -448,10 +448,15 @@
 	}
 
 	async function openRun(runId: number) {
-		currentRun = await api.getRun(runId);
-		currentStep = 3;
-		if (currentRun.status === 'queued' || currentRun.status === 'running') {
-			startPolling(runId);
+		historyError = '';
+		try {
+			currentRun = await api.getRun(runId);
+			currentStep = 3;
+			if (currentRun.status === 'queued' || currentRun.status === 'running') {
+				startPolling(runId);
+			}
+		} catch (error) {
+			historyError = error instanceof Error ? error.message : 'Unable to open the run.';
 		}
 	}
 
@@ -1285,8 +1290,7 @@
 		opacity: 1;
 	}
 
-	input,
-	select {
+	input {
 		padding: 0.78rem 0.9rem;
 		border-radius: 8px;
 		border: 1px solid rgba(20, 36, 58, 0.14);

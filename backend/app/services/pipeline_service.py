@@ -307,6 +307,13 @@ def _cached_buildings_need_recompute(summary: dict[str, Any], buildings_geojson:
 
     if building_summary.get("damaged_buildings"):
         return True
+    if (
+        building_summary.get("available")
+        and not reason
+        and "damaged_buildings" in building_summary
+        and building_summary.get("damaged_buildings") == 0
+    ):
+        return False
     if building_summary.get("available") and not reason and building_summary.get("total_buildings", 0) > 0:
         return True
 
